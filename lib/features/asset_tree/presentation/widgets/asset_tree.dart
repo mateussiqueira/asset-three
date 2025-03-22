@@ -19,23 +19,29 @@ class AssetTree extends StatelessWidget {
       return Center(child: Text(provider.error!));
     }
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ...provider.getRootLocations().map(
-            (location) => LocationTreeNode(
-              location: location,
-              level: 0,
-              provider: provider,
-            ),
-          ),
-          ...provider.getUnlinkedAssets().map(
-            (asset) =>
-                AssetTreeNode(asset: asset, level: 0, provider: provider),
-          ),
-        ],
-      ),
+    final rootLocations = provider.getRootLocations();
+    final unlinkedAssets = provider.getUnlinkedAssets();
+
+    return ListView.builder(
+      itemCount: rootLocations.length + unlinkedAssets.length,
+      itemBuilder: (context, index) {
+        if (index < rootLocations.length) {
+          return LocationTreeNode(
+            key: ValueKey('location_${rootLocations[index].id}'),
+            location: rootLocations[index],
+            level: 0,
+            provider: provider,
+          );
+        } else {
+          final assetIndex = index - rootLocations.length;
+          return AssetTreeNode(
+            key: ValueKey('asset_${unlinkedAssets[assetIndex].id}'),
+            asset: unlinkedAssets[assetIndex],
+            level: 0,
+            provider: provider,
+          );
+        }
+      },
     );
   }
 }

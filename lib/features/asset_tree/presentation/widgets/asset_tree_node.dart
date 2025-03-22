@@ -51,12 +51,18 @@ class AssetTreeNode extends StatelessWidget {
           ),
         ),
         if (isExpanded && hasChildren)
-          ...childAssets.map(
-            (child) => AssetTreeNode(
-              asset: child,
-              level: level + 1,
-              provider: provider,
-            ),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: childAssets.length,
+            itemBuilder: (context, index) {
+              return AssetTreeNode(
+                key: ValueKey('child_asset_${childAssets[index].id}'),
+                asset: childAssets[index],
+                level: level + 1,
+                provider: provider,
+              );
+            },
           ),
       ],
     );

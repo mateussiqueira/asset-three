@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/services/tree_processing_service.dart';
 import '../../domain/entities/asset.dart';
 import '../../domain/entities/location.dart';
 import '../../domain/usecases/get_asset_tree.dart';
@@ -12,8 +13,10 @@ class AssetTreeProvider extends ChangeNotifier {
   bool _hasEnergyFilter = false;
   bool _hasCriticalFilter = false;
   final Map<String, bool> _expandedNodes = {};
-  final Map<String, List<Asset>> _filteredAssetsCache = {};
+  Map<String, List<Asset>> _filteredAssetsCache = {};
   final Map<String, List<Location>> _locationsCache = {};
+  List<Asset> _allAssets = [];
+  List<Location> _allLocations = [];
 
   AssetTreeProvider(this._getAssetTree) {
     loadData('company_id');
@@ -32,6 +35,9 @@ class AssetTreeProvider extends ChangeNotifier {
 
     try {
       await _getAssetTree.execute(companyId);
+      _allAssets = _getAssetTree.getUnlinkedAssets();
+      _allLocations = _getAssetTree.getRootLocations();
+      await _processTreeInBackground();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -41,21 +47,33 @@ class AssetTreeProvider extends ChangeNotifier {
     }
   }
 
-  void setSearchText(String text) {
+  Future<void> _processTreeInBackground() async {
+    final result = await TreeProcessingService.processAssetTreeInBackground(
+      _allAssets,
+      _allLocations,
+      _searchText,
+      _hasEnergyFilter,
+      _hasCriticalFilter,
+    );
+    _filteredAssetsCache = result;
+    notifyListeners();
+  }
+
+  void setSearchText(String text) async {
     _searchText = text;
-    clearCache();
+    await _processTreeInBackground();
     notifyListeners();
   }
 
-  void toggleEnergyFilter() {
+  void toggleEnergyFilter() async {
     _hasEnergyFilter = !_hasEnergyFilter;
-    clearCache();
+    await _processTreeInBackground();
     notifyListeners();
   }
 
-  void toggleCriticalFilter() {
+  void toggleCriticalFilter() async {
     _hasCriticalFilter = !_hasCriticalFilter;
-    clearCache();
+    await _processTreeInBackground();
     notifyListeners();
   }
 
@@ -75,8 +93,8 @@ class AssetTreeProvider extends ChangeNotifier {
     }
 
     final assets =
-        _getAssetTree
-            .getChildAssets(parentId)
+        _allAssets
+            .where((asset) => asset.parentId == parentId)
             .where(shouldShowAssetWithParents)
             .toList();
 
@@ -90,7 +108,8 @@ class AssetTreeProvider extends ChangeNotifier {
       return _locationsCache[cacheKey]!;
     }
 
-    final locations = _getAssetTree.getSubLocations(parentId);
+    final locations =
+        _allLocations.where((loc) => loc.parentId == parentId).toList();
     _locationsCache[cacheKey] = locations;
     return locations;
   }
@@ -102,8 +121,8 @@ class AssetTreeProvider extends ChangeNotifier {
     }
 
     final assets =
-        _getAssetTree
-            .getLocationAssets(locationId)
+        _allAssets
+            .where((asset) => asset.locationId == locationId)
             .where(shouldShowAssetWithParents)
             .toList();
 
@@ -112,15 +131,19 @@ class AssetTreeProvider extends ChangeNotifier {
   }
 
   List<Location> getRootLocations() {
-    return _getAssetTree.getRootLocations();
+    return _allLocations;
   }
 
   List<Asset> getUnlinkedAssets() {
-    return _getAssetTree.getUnlinkedAssets();
+    return _allAssets;
   }
 
   Location? getLocation(String locationId) {
-    return _getAssetTree.getLocation(locationId);
+    try {
+      return _allLocations.firstWhere((loc) => loc.id == locationId);
+    } catch (e) {
+      return null;
+    }
   }
 
   bool shouldShowAsset(Asset asset) {

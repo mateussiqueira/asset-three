@@ -43,22 +43,32 @@ class LocationTreeNode extends StatelessWidget {
             ),
           ),
         ),
-        if (isExpanded && hasChildren) ...[
-          ...subLocations.map(
-            (loc) => LocationTreeNode(
-              location: loc,
-              level: level + 1,
-              provider: provider,
-            ),
+        if (isExpanded && hasChildren)
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: subLocations.length + locationAssets.length,
+            itemBuilder: (context, index) {
+              if (index < subLocations.length) {
+                return LocationTreeNode(
+                  key: ValueKey('sub_location_${subLocations[index].id}'),
+                  location: subLocations[index],
+                  level: level + 1,
+                  provider: provider,
+                );
+              } else {
+                final assetIndex = index - subLocations.length;
+                return AssetTreeNode(
+                  key: ValueKey(
+                    'location_asset_${locationAssets[assetIndex].id}',
+                  ),
+                  asset: locationAssets[assetIndex],
+                  level: level + 1,
+                  provider: provider,
+                );
+              }
+            },
           ),
-          ...locationAssets.map(
-            (asset) => AssetTreeNode(
-              asset: asset,
-              level: level + 1,
-              provider: provider,
-            ),
-          ),
-        ],
       ],
     );
   }
