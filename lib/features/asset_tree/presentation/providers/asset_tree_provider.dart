@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../data/services/tree_processing_service.dart';
@@ -17,6 +19,7 @@ class AssetTreeProvider extends ChangeNotifier {
   final Map<String, List<Location>> _locationsCache = {};
   List<Asset> _allAssets = [];
   List<Location> _allLocations = [];
+  Timer? _debounceTimer;
 
   AssetTreeProvider(this._getAssetTree) {
     loadData('company_id');
@@ -48,33 +51,43 @@ class AssetTreeProvider extends ChangeNotifier {
   }
 
   Future<void> _processTreeInBackground() async {
-    final result = await TreeProcessingService.processAssetTreeInBackground(
-      _allAssets,
-      _allLocations,
-      _searchText,
-      _hasEnergyFilter,
-      _hasCriticalFilter,
-    );
-    _filteredAssetsCache = result;
+    _isLoading = true;
     notifyListeners();
+
+    try {
+      final result = await TreeProcessingService.processAssetTreeInBackground(
+        _allAssets,
+        _allLocations,
+        _searchText,
+        _hasEnergyFilter,
+        _hasCriticalFilter,
+      );
+      _filteredAssetsCache = result;
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
-  void setSearchText(String text) async {
+  Future<void> setSearchText(String text) async {
     _searchText = text;
-    await _processTreeInBackground();
-    notifyListeners();
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _processTreeInBackground();
+    });
   }
 
-  void toggleEnergyFilter() async {
+  Future<void> toggleEnergyFilter() async {
     _hasEnergyFilter = !_hasEnergyFilter;
     await _processTreeInBackground();
-    notifyListeners();
   }
 
-  void toggleCriticalFilter() async {
+  Future<void> toggleCriticalFilter() async {
     _hasCriticalFilter = !_hasCriticalFilter;
     await _processTreeInBackground();
-    notifyListeners();
   }
 
   void toggleNodeExpansion(String nodeId) {
@@ -184,5 +197,11 @@ class AssetTreeProvider extends ChangeNotifier {
   void clearCache() {
     _filteredAssetsCache.clear();
     _locationsCache.clear();
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
   }
 }
