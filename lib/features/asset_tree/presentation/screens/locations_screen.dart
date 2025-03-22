@@ -3,56 +3,78 @@ import 'package:provider/provider.dart';
 
 import '../providers/asset_tree_provider.dart';
 import '../widgets/asset_tree.dart';
+import '../widgets/filter_chips.dart';
+import '../widgets/search_controls.dart';
 
 class LocationsScreen extends StatelessWidget {
   const LocationsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Locations')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Consumer<AssetTreeProvider>(
-              builder:
-                  (context, provider, child) => Column(
-                    children: [
-                      TextField(
-                        decoration: const InputDecoration(
-                          labelText: 'Search',
-                          prefixIcon: Icon(Icons.search),
-                        ),
-                        onChanged: provider.setSearchText,
-                      ),
-                      Row(
-                        children: [
-                          FilterChip(
-                            label: const Text('Energy'),
-                            selected: provider.hasEnergyFilter,
-                            onSelected: (_) => provider.toggleEnergyFilter(),
-                          ),
-                          const SizedBox(width: 8),
-                          FilterChip(
-                            label: const Text('Critical'),
-                            selected: provider.hasCriticalFilter,
-                            onSelected: (_) => provider.toggleCriticalFilter(),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+    return const Scaffold(appBar: _LocationsAppBar(), body: _LocationsBody());
+  }
+}
+
+class _LocationsAppBar extends StatelessWidget implements PreferredSizeWidget {
+  const _LocationsAppBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppBar(title: const Text('Locations'), centerTitle: true);
+  }
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+}
+
+class _LocationsBody extends StatelessWidget {
+  const _LocationsBody();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: const [
+        _SearchAndFiltersSection(),
+        Expanded(child: _AssetTreeSection()),
+      ],
+    );
+  }
+}
+
+class _SearchAndFiltersSection extends StatelessWidget {
+  const _SearchAndFiltersSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Consumer<AssetTreeProvider>(
+        builder:
+            (context, provider, _) => Column(
+              children: [
+                SearchControls(onSearchChanged: provider.setSearchText),
+                const SizedBox(height: 8),
+                FilterChips(
+                  onEnergyFilterChanged: (_) => provider.toggleEnergyFilter(),
+                  onCriticalFilterChanged:
+                      (_) => provider.toggleCriticalFilter(),
+                  hasEnergyFilter: provider.hasEnergyFilter,
+                  hasCriticalFilter: provider.hasCriticalFilter,
+                ),
+              ],
             ),
-          ),
-          Expanded(
-            child: Consumer<AssetTreeProvider>(
-              builder:
-                  (context, provider, child) => AssetTree(provider: provider),
-            ),
-          ),
-        ],
       ),
+    );
+  }
+}
+
+class _AssetTreeSection extends StatelessWidget {
+  const _AssetTreeSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AssetTreeProvider>(
+      builder: (context, provider, _) => AssetTree(provider: provider),
     );
   }
 }

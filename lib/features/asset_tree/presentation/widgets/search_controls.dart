@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../providers/asset_tree_provider.dart';
 
 class SearchControls extends StatelessWidget {
-  const SearchControls({super.key});
+  final ValueChanged<String> onSearchChanged;
+
+  const SearchControls({super.key, required this.onSearchChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -20,9 +22,7 @@ class SearchControls extends StatelessWidget {
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
               ),
-              onChanged: (value) {
-                context.read<AssetTreeProvider>().setSearchText(value);
-              },
+              onChanged: onSearchChanged,
             ),
           ),
           const SizedBox(width: 8),
