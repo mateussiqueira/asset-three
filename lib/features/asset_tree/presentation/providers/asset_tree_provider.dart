@@ -20,6 +20,8 @@ class AssetTreeProvider extends ChangeNotifier {
   List<Asset> _allAssets = [];
   List<Location> _allLocations = [];
   Timer? _debounceTimer;
+  bool _isDirty = false;
+  Timer? _notifyTimer;
 
   AssetTreeProvider(this._getAssetTree) {
     loadData('company_id');
@@ -73,6 +75,7 @@ class AssetTreeProvider extends ChangeNotifier {
   }
 
   Future<void> setSearchText(String text) async {
+    if (_searchText == text) return;
     _searchText = text;
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 300), () {
@@ -92,7 +95,7 @@ class AssetTreeProvider extends ChangeNotifier {
 
   void toggleNodeExpansion(String nodeId) {
     _expandedNodes[nodeId] = !(_expandedNodes[nodeId] ?? false);
-    notifyListeners();
+    _scheduleNotify();
   }
 
   bool isNodeExpanded(String nodeId) {
@@ -199,9 +202,21 @@ class AssetTreeProvider extends ChangeNotifier {
     _locationsCache.clear();
   }
 
+  void _scheduleNotify() {
+    _isDirty = true;
+    _notifyTimer?.cancel();
+    _notifyTimer = Timer(const Duration(milliseconds: 16), () {
+      if (_isDirty) {
+        _isDirty = false;
+        notifyListeners();
+      }
+    });
+  }
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _notifyTimer?.cancel();
     super.dispose();
   }
 }
