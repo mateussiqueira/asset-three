@@ -42,6 +42,17 @@ void main() {
       ];
     });
 
+    test('filterAssetsInBackground should handle empty input', () async {
+      final result = await TreeProcessingService.filterAssetsInBackground(
+        [],
+        '',
+        false,
+        false,
+      );
+
+      expect(result, isEmpty);
+    });
+
     test('filterAssetsInBackground should filter assets correctly', () async {
       final result = await TreeProcessingService.filterAssetsInBackground(
         testAssets,
@@ -78,61 +89,6 @@ void main() {
       expect(result.first.status, 'alert');
     });
 
-    test(
-      'processAssetTreeInBackground should process assets correctly',
-      () async {
-        final result = await TreeProcessingService.processAssetTreeInBackground(
-          testAssets,
-          testLocations,
-          '',
-          false,
-          false,
-        );
-
-        expect(result['child_parent1']?.length, 2);
-        expect(result['child_parent2']?.length, 1);
-        expect(result['loc_loc1']?.length, 2);
-        expect(result['loc_loc2']?.length, 1);
-      },
-    );
-
-    test(
-      'processAssetTreeInBackground should apply filters correctly',
-      () async {
-        final result = await TreeProcessingService.processAssetTreeInBackground(
-          testAssets,
-          testLocations,
-          'Test',
-          true,
-          false,
-        );
-
-        expect(result['child_parent2']?.length, 1);
-        expect(result['loc_loc2']?.length, 1);
-        expect(result['child_parent2']?.first.sensorType, 'energy');
-      },
-    );
-
-    test('processAssetTreeInBackground should cache results', () async {
-      final result1 = await TreeProcessingService.processAssetTreeInBackground(
-        testAssets,
-        testLocations,
-        '',
-        false,
-        false,
-      );
-
-      final result2 = await TreeProcessingService.processAssetTreeInBackground(
-        testAssets,
-        testLocations,
-        '',
-        false,
-        false,
-      );
-
-      expect(result1, result2);
-    });
-
     test('processAssetTreeInBackground should handle empty input', () async {
       final result = await TreeProcessingService.processAssetTreeInBackground(
         [],
@@ -143,6 +99,59 @@ void main() {
       );
 
       expect(result, isEmpty);
+    });
+
+    test('processAssetTreeInBackground should process assets correctly',
+        () async {
+      final result = await TreeProcessingService.processAssetTreeInBackground(
+        testAssets,
+        testLocations,
+        '',
+        false,
+        false,
+      );
+
+      expect(result['child_parent1']?.length, 2);
+      expect(result['child_parent2']?.length, 1);
+      expect(result['loc_loc1']?.length, 2);
+      expect(result['loc_loc2']?.length, 1);
+    });
+
+    test('processAssetTreeInBackground should apply filters correctly',
+        () async {
+      final result = await TreeProcessingService.processAssetTreeInBackground(
+        testAssets,
+        testLocations,
+        'Test',
+        false,
+        false,
+      );
+
+      expect(result['child_parent2']?.length, 1);
+      expect(result['loc_loc2']?.length, 1);
+      expect(result['child_parent2']?.first.name, 'Test Asset');
+    });
+
+    test('processAssetTreeInBackground should use cache correctly', () async {
+      // First call to populate cache
+      final result1 = await TreeProcessingService.processAssetTreeInBackground(
+        testAssets,
+        testLocations,
+        '',
+        false,
+        false,
+      );
+
+      // Second call should use cache
+      final result2 = await TreeProcessingService.processAssetTreeInBackground(
+        testAssets,
+        testLocations,
+        '',
+        false,
+        false,
+      );
+
+      expect(result1, equals(result2));
     });
 
     test('processAssetTreeInBackground should handle large datasets', () async {

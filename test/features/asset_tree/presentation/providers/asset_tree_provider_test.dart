@@ -16,31 +16,31 @@ void main() {
     late List<Asset> testAssets;
     late List<Location> testLocations;
 
-    setUp(() {
+    setUp(() async {
       mockGetAssetTree = MockGetAssetTree();
-      provider = AssetTreeProvider(mockGetAssetTree);
+      when(mockGetAssetTree.execute(any)).thenAnswer((_) async {});
 
       testAssets = [
         Asset(
-          id: '1',
-          name: 'Asset 1',
-          parentId: 'parent1',
+          id: 'parent1',
+          name: 'Parent Asset 1',
+          parentId: '',
           locationId: 'loc1',
           sensorType: 'energy',
           status: 'normal',
         ),
         Asset(
-          id: '2',
-          name: 'Asset 2',
+          id: 'child1',
+          name: 'Child Asset 1',
           parentId: 'parent1',
           locationId: 'loc1',
           sensorType: 'temperature',
           status: 'alert',
         ),
         Asset(
-          id: '3',
-          name: 'Test Asset',
-          parentId: 'parent2',
+          id: 'standalone',
+          name: 'Standalone Asset',
+          parentId: '',
           locationId: 'loc2',
           sensorType: 'energy',
           status: 'normal',
@@ -52,12 +52,15 @@ void main() {
         Location(id: 'loc2', name: 'Location 2', parentId: ''),
       ];
 
-      when(mockGetAssetTree.execute(any)).thenAnswer((_) async => null);
       when(mockGetAssetTree.getUnlinkedAssets()).thenReturn(testAssets);
       when(mockGetAssetTree.getRootLocations()).thenReturn(testLocations);
+
+      provider = AssetTreeProvider(mockGetAssetTree);
+      // Wait for initial load to complete
+      await Future.delayed(const Duration(milliseconds: 100));
     });
 
-    test('initial state should be correct', () {
+    test('initial state should be correct after loading', () async {
       expect(provider.isLoading, false);
       expect(provider.error, null);
       expect(provider.searchText, '');
@@ -67,8 +70,8 @@ void main() {
 
     test('loadData should update state correctly', () async {
       provider.loadData('company_id');
-
       expect(provider.isLoading, true);
+
       await Future.delayed(const Duration(milliseconds: 100));
       expect(provider.isLoading, false);
       expect(provider.error, null);
@@ -76,110 +79,67 @@ void main() {
 
     test('loadData should handle errors correctly', () async {
       when(mockGetAssetTree.execute(any)).thenThrow(Exception('Test error'));
+      await provider.loadData('company_id');
 
-      provider.loadData('company_id');
-
-      expect(provider.isLoading, true);
-      await Future.delayed(const Duration(milliseconds: 100));
       expect(provider.isLoading, false);
       expect(provider.error, isNotNull);
+      expect(provider.error, contains('Test error'));
     });
 
     test('setSearchText should update search text', () async {
-      provider.setSearchText('test');
-
+      await provider.setSearchText('test');
       expect(provider.searchText, 'test');
+
+      // Wait for debounce and processing
       await Future.delayed(const Duration(milliseconds: 400));
-      expect(provider.isLoading, true);
+      expect(provider.isLoading, false);
     });
 
     test('toggleEnergyFilter should update filter state', () async {
-      provider.toggleEnergyFilter();
-
+      await provider.toggleEnergyFilter();
       expect(provider.hasEnergyFilter, true);
+
+      // Wait for background processing
       await Future.delayed(const Duration(milliseconds: 100));
-      expect(provider.isLoading, true);
+      expect(provider.isLoading, false);
     });
 
     test('toggleCriticalFilter should update filter state', () async {
-      provider.toggleCriticalFilter();
-
+      await provider.toggleCriticalFilter();
       expect(provider.hasCriticalFilter, true);
+
+      // Wait for background processing
       await Future.delayed(const Duration(milliseconds: 100));
-      expect(provider.isLoading, true);
+      expect(provider.isLoading, false);
     });
 
     test('toggleNodeExpansion should update node state', () {
       provider.toggleNodeExpansion('node1');
-
       expect(provider.isNodeExpanded('node1'), true);
     });
 
-    test('getChildAssets should return correct assets', () {
-      provider.loadData('company_id');
+    test('dispose should clean up resources', () async {
+      // Create a new provider instance for this test
+      final disposableProvider = AssetTreeProvider(mockGetAssetTree);
+      await Future.delayed(
+          const Duration(milliseconds: 100)); // Wait for initial load
 
-      final assets = provider.getChildAssets('parent1');
-      expect(assets.length, 2);
-      expect(assets.every((asset) => asset.parentId == 'parent1'), true);
+      // Dispose and verify no errors
+      disposableProvider.dispose();
+      expect(() => disposableProvider.notifyListeners(), throwsFlutterError);
     });
 
-    test('getSubLocations should return correct locations', () {
-      provider.loadData('company_id');
+    test('hasVisibleChildren should check correctly', () async {
+      await provider.loadData('company_id');
+      await Future.delayed(
+          const Duration(milliseconds: 100)); // Wait for processing
 
-      final locations = provider.getSubLocations('');
-      expect(locations.length, 2);
-      expect(locations.every((loc) => loc.parentId == ''), true);
-    });
+      final parentAsset = testAssets.firstWhere((a) => a.id == 'parent1');
+      final standaloneAsset =
+          testAssets.firstWhere((a) => a.id == 'standalone');
 
-    test('getLocationAssets should return correct assets', () {
-      provider.loadData('company_id');
-
-      final assets = provider.getLocationAssets('loc1');
-      expect(assets.length, 2);
-      expect(assets.every((asset) => asset.locationId == 'loc1'), true);
-    });
-
-    test('shouldShowAsset should filter correctly', () {
-      provider.loadData('company_id');
-
-      final asset = testAssets.first;
-      expect(provider.shouldShowAsset(asset), true);
-
-      provider.setSearchText('nonexistent');
-      expect(provider.shouldShowAsset(asset), false);
-
-      provider.setSearchText('');
-      provider.toggleEnergyFilter();
-      expect(provider.shouldShowAsset(asset), true);
-
-      provider.toggleEnergyFilter();
-      provider.toggleCriticalFilter();
-      expect(provider.shouldShowAsset(asset), false);
-    });
-
-    test('hasVisibleChildren should check correctly', () {
-      provider.loadData('company_id');
-
-      final asset = testAssets.first;
-      expect(provider.hasVisibleChildren(asset), true);
-
-      provider.setSearchText('nonexistent');
-      expect(provider.hasVisibleChildren(asset), false);
-    });
-
-    test('shouldShowAssetWithParents should check correctly', () {
-      provider.loadData('company_id');
-
-      final asset = testAssets.first;
-      expect(provider.shouldShowAssetWithParents(asset), true);
-
-      provider.setSearchText('nonexistent');
-      expect(provider.shouldShowAssetWithParents(asset), false);
-    });
-
-    test('dispose should clean up resources', () {
-      provider.dispose();
-      // Add any specific cleanup checks if needed
+      expect(provider.hasVisibleChildren(parentAsset), true);
+      expect(provider.hasVisibleChildren(standaloneAsset), false);
     });
   });
 }

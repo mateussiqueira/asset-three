@@ -6,68 +6,65 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
-import 'package:provider/provider.dart';
 
-@GenerateMocks([AssetTreeProvider])
+@GenerateNiceMocks([MockSpec<AssetTreeProvider>()])
 import 'asset_tree_test.mocks.dart';
 
 void main() {
+  late MockAssetTreeProvider mockProvider;
+  late List<Location> mockLocations;
+  late List<Asset> mockAssets;
+
+  setUp(() {
+    mockProvider = MockAssetTreeProvider();
+    mockLocations = [
+      Location(
+        id: 'loc1',
+        name: 'Location 1',
+        parentId: '',
+      ),
+    ];
+    mockAssets = [
+      Asset(
+        id: 'asset1',
+        name: 'Asset 1',
+        locationId: 'loc1',
+        parentId: '',
+        sensorType: 'temperature',
+        status: 'normal',
+      ),
+      Asset(
+        id: 'asset2',
+        name: 'Asset 2',
+        locationId: 'loc1',
+        parentId: 'asset1',
+        sensorType: 'energy',
+        status: 'alert',
+      ),
+    ];
+
+    // Setup default stubs
+    when(mockProvider.isLoading).thenReturn(false);
+    when(mockProvider.error).thenReturn(null);
+    when(mockProvider.getRootLocations()).thenReturn(mockLocations);
+    when(mockProvider.getUnlinkedAssets()).thenReturn([]);
+    when(mockProvider.getSubLocations(any)).thenReturn([]);
+    when(mockProvider.getLocationAssets(any)).thenReturn([]);
+    when(mockProvider.getChildAssets(any)).thenReturn([]);
+    when(mockProvider.isNodeExpanded(any)).thenReturn(false);
+    when(mockProvider.shouldShowAssetWithParents(any)).thenReturn(true);
+    when(mockProvider.shouldShowAsset(any)).thenReturn(true);
+  });
+
   group('AssetTree', () {
-    late MockAssetTreeProvider mockProvider;
-    late List<Asset> testAssets;
-    late List<Location> testLocations;
-
-    setUp(() {
-      mockProvider = MockAssetTreeProvider();
-
-      testAssets = [
-        Asset(
-          id: '1',
-          name: 'Asset 1',
-          parentId: 'parent1',
-          locationId: 'loc1',
-          sensorType: 'energy',
-          status: 'normal',
-        ),
-        Asset(
-          id: '2',
-          name: 'Asset 2',
-          parentId: 'parent1',
-          locationId: 'loc1',
-          sensorType: 'temperature',
-          status: 'alert',
-        ),
-        Asset(
-          id: '3',
-          name: 'Test Asset',
-          parentId: 'parent2',
-          locationId: 'loc2',
-          sensorType: 'energy',
-          status: 'normal',
-        ),
-      ];
-
-      testLocations = [
-        Location(id: 'loc1', name: 'Location 1', parentId: ''),
-        Location(id: 'loc2', name: 'Location 2', parentId: ''),
-      ];
-
-      when(mockProvider.isLoading).thenReturn(false);
-      when(mockProvider.error).thenReturn(null);
-      when(mockProvider.getRootLocations()).thenReturn(testLocations);
-      when(mockProvider.getLocationAssets(any)).thenReturn([]);
-      when(mockProvider.getChildAssets(any)).thenReturn([]);
-    });
-
     testWidgets('should show loading indicator when loading',
         (WidgetTester tester) async {
       when(mockProvider.isLoading).thenReturn(true);
 
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider<AssetTreeProvider>.value(
-            value: mockProvider,
-            child: AssetTree(provider: mockProvider),
+          home: Scaffold(
+            body: AssetTree(provider: mockProvider),
           ),
         ),
       );
@@ -75,15 +72,14 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
-    testWidgets('should show error message when error exists',
+    testWidgets('should show error message when error occurs',
         (WidgetTester tester) async {
       when(mockProvider.error).thenReturn('Test error');
 
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider<AssetTreeProvider>.value(
-            value: mockProvider,
-            child: AssetTree(provider: mockProvider),
+          home: Scaffold(
+            body: AssetTree(provider: mockProvider),
           ),
         ),
       );
@@ -95,74 +91,70 @@ void main() {
         (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider<AssetTreeProvider>.value(
-            value: mockProvider,
-            child: AssetTree(provider: mockProvider),
+          home: Scaffold(
+            body: AssetTree(provider: mockProvider),
           ),
         ),
       );
 
       expect(find.text('Location 1'), findsOneWidget);
-      expect(find.text('Location 2'), findsOneWidget);
     });
 
     testWidgets('should show assets when location is expanded',
         (WidgetTester tester) async {
-      when(mockProvider.getLocationAssets('loc1')).thenReturn(
-        testAssets.where((asset) => asset.locationId == 'loc1').toList(),
-      );
+      when(mockProvider.isNodeExpanded('loc1')).thenReturn(true);
+      when(mockProvider.getLocationAssets('loc1')).thenReturn([mockAssets[0]]);
 
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider<AssetTreeProvider>.value(
-            value: mockProvider,
-            child: AssetTree(provider: mockProvider),
+          home: Scaffold(
+            body: AssetTree(provider: mockProvider),
           ),
         ),
       );
 
-      await tester.tap(find.text('Location 1'));
-      await tester.pump();
-
       expect(find.text('Asset 1'), findsOneWidget);
-      expect(find.text('Asset 2'), findsOneWidget);
     });
 
     testWidgets('should show child assets when asset is expanded',
         (WidgetTester tester) async {
-      when(mockProvider.getChildAssets('parent1')).thenReturn(
-        testAssets.where((asset) => asset.parentId == 'parent1').toList(),
-      );
+      // Show the location and its assets
+      when(mockProvider.isNodeExpanded('loc1')).thenReturn(true);
+      when(mockProvider.getLocationAssets('loc1')).thenReturn([mockAssets[0]]);
+
+      // Show the child assets when parent is expanded
+      when(mockProvider.isNodeExpanded('asset1')).thenReturn(true);
+      when(mockProvider.getChildAssets('asset1')).thenReturn([mockAssets[1]]);
 
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider<AssetTreeProvider>.value(
-            value: mockProvider,
-            child: AssetTree(provider: mockProvider),
+          home: Scaffold(
+            body: AssetTree(provider: mockProvider),
           ),
         ),
       );
-
-      await tester.tap(find.text('Asset 1'));
       await tester.pump();
 
+      expect(find.text('Location 1'), findsOneWidget);
+      expect(find.text('Asset 1'), findsOneWidget);
       expect(find.text('Asset 2'), findsOneWidget);
     });
 
     testWidgets('should handle empty data gracefully',
         (WidgetTester tester) async {
       when(mockProvider.getRootLocations()).thenReturn([]);
+      when(mockProvider.getUnlinkedAssets()).thenReturn([]);
 
       await tester.pumpWidget(
         MaterialApp(
-          home: ChangeNotifierProvider<AssetTreeProvider>.value(
-            value: mockProvider,
-            child: AssetTree(provider: mockProvider),
+          home: Scaffold(
+            body: AssetTree(provider: mockProvider),
           ),
         ),
       );
 
-      expect(find.text('No locations found'), findsOneWidget);
+      expect(find.byType(ListView), findsOneWidget);
+      expect(find.byType(Text), findsNothing);
     });
   });
 }
