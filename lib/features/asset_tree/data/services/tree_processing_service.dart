@@ -5,6 +5,54 @@ import 'dart:isolate';
 import '../../domain/entities/asset.dart';
 import '../../domain/entities/location.dart';
 
+void _filterAssetsIsolate(_FilterAssetsMessage message) {
+  final filteredAssets =
+      message.assets.where((asset) {
+        if (message.searchText.isNotEmpty) {
+          final name = asset.name.toLowerCase();
+          if (!name.contains(message.searchText)) {
+            return false;
+          }
+        }
+
+        if (message.hasEnergyFilter && asset.sensorType != 'energy') {
+          return false;
+        }
+
+        if (message.hasCriticalFilter && asset.status != 'alert') {
+          return false;
+        }
+
+        return true;
+      }).toList();
+
+  message.sendPort.send(filteredAssets);
+}
+
+void _processBatchIsolate(_ProcessBatchMessage message) {
+  final result = <String, List<Asset>>{};
+  final searchLower = message.searchText.toLowerCase();
+
+  for (final asset in message.batch) {
+    if (!_shouldIncludeAsset(
+      asset,
+      searchLower,
+      message.hasEnergyFilter,
+      message.hasCriticalFilter,
+    )) {
+      continue;
+    }
+
+    final parentKey = 'child_${asset.parentId}';
+    final locationKey = 'loc_${asset.locationId}';
+
+    result[parentKey] = [...(result[parentKey] ?? []), asset];
+    result[locationKey] = [...(result[locationKey] ?? []), asset];
+  }
+
+  message.sendPort.send(result);
+}
+
 bool _shouldIncludeAsset(
   Asset asset,
   String searchText,
@@ -94,6 +142,17 @@ class TreeProcessingService {
     return result;
   }
 
+  static void _cleanupOldCache() {
+    final now = DateTime.now();
+    _cacheTimestamps.removeWhere((key, timestamp) {
+      if (now.difference(timestamp) > _cacheDuration) {
+        _cache.remove(key);
+        return true;
+      }
+      return false;
+    });
+  }
+
   static String _generateCacheKey(
     List<Asset> assets,
     List<Location> locations,
@@ -111,21 +170,16 @@ class TreeProcessingService {
     return DateTime.now().difference(timestamp) < _cacheDuration;
   }
 
-  static void _updateCache(String key, Map<String, List<Asset>> data) {
-    _cache[key] = data;
-    _cacheTimestamps[key] = DateTime.now();
-    _cleanupOldCache();
-  }
-
-  static void _cleanupOldCache() {
-    final now = DateTime.now();
-    _cacheTimestamps.removeWhere((key, timestamp) {
-      if (now.difference(timestamp) > _cacheDuration) {
-        _cache.remove(key);
-        return true;
-      }
-      return false;
-    });
+  static Map<String, List<Asset>> _mergeResults(
+    List<Map<String, List<Asset>>> results,
+  ) {
+    final merged = <String, List<Asset>>{};
+    for (final result in results) {
+      result.forEach((key, value) {
+        merged[key] = [...(merged[key] ?? []), ...value];
+      });
+    }
+    return merged;
   }
 
   static Future<Map<String, List<Asset>>> _processWithIsolates(
@@ -175,16 +229,10 @@ class TreeProcessingService {
     return batches;
   }
 
-  static Map<String, List<Asset>> _mergeResults(
-    List<Map<String, List<Asset>>> results,
-  ) {
-    final merged = <String, List<Asset>>{};
-    for (final result in results) {
-      result.forEach((key, value) {
-        merged[key] = [...(merged[key] ?? []), ...value];
-      });
-    }
-    return merged;
+  static void _updateCache(String key, Map<String, List<Asset>> data) {
+    _cache[key] = data;
+    _cacheTimestamps[key] = DateTime.now();
+    _cleanupOldCache();
   }
 }
 
@@ -220,52 +268,4 @@ class _ProcessBatchMessage {
     required this.hasCriticalFilter,
     required this.sendPort,
   });
-}
-
-void _filterAssetsIsolate(_FilterAssetsMessage message) {
-  final filteredAssets =
-      message.assets.where((asset) {
-        if (message.searchText.isNotEmpty) {
-          final name = asset.name.toLowerCase();
-          if (!name.contains(message.searchText)) {
-            return false;
-          }
-        }
-
-        if (message.hasEnergyFilter && asset.sensorType != 'energy') {
-          return false;
-        }
-
-        if (message.hasCriticalFilter && asset.status != 'alert') {
-          return false;
-        }
-
-        return true;
-      }).toList();
-
-  message.sendPort.send(filteredAssets);
-}
-
-void _processBatchIsolate(_ProcessBatchMessage message) {
-  final result = <String, List<Asset>>{};
-  final searchLower = message.searchText.toLowerCase();
-
-  for (final asset in message.batch) {
-    if (!_shouldIncludeAsset(
-      asset,
-      searchLower,
-      message.hasEnergyFilter,
-      message.hasCriticalFilter,
-    )) {
-      continue;
-    }
-
-    final parentKey = 'child_${asset.parentId}';
-    final locationKey = 'loc_${asset.locationId}';
-
-    result[parentKey] = [...(result[parentKey] ?? []), asset];
-    result[locationKey] = [...(result[locationKey] ?? []), asset];
-  }
-
-  message.sendPort.send(result);
 }
